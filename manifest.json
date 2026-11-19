@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
   "id": "minhaentrada.ajuda",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "sdk": "1.x",
   "name": "Procedimentos da Central de Ajuda",
   "description": "Busca os artigos de ajuda.minhaentrada.com.br e envia o procedimento no atendimento.",

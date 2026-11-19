@@ -29,12 +29,24 @@
             background:var(--ext-color-primary,#1976d2); color:var(--ext-color-on-primary,#fff); }
   .enviar[disabled] { opacity:.5; cursor:default; }
   .dica { font-size:11px; text-align:center; margin-top:6px; }
-  .chips { display:flex; gap:6px; overflow-x:auto; padding:2px 0 6px; scrollbar-width:thin; }
-  .chip { flex:none; padding:5px 10px; border-radius:999px; border:1px solid var(--ext-color-border,#dcdcdc);
-          background:transparent; cursor:pointer; font-size:12px; white-space:nowrap; }
-  .chip:hover { border-color:var(--ext-color-primary,#1976d2); }
-  .chip.on { background:var(--ext-color-primary,#1976d2); border-color:var(--ext-color-primary,#1976d2); color:var(--ext-color-on-primary,#fff); }
-  .chip em { font-style:normal; opacity:.7; margin-left:4px; font-size:11px; }
+  .sel { position:relative; }
+  .sel-btn { width:100%; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:7px 10px; cursor:pointer;
+             text-align:left; background:rgba(25,118,210,.06); border:1.5px solid var(--ext-color-primary,#1976d2);
+             border-radius:var(--ext-radius,6px); color:var(--ext-color-text,#222); }
+  .sel-btn:focus { outline:none; box-shadow:0 0 0 3px rgba(25,118,210,.18); }
+  .sel-btn b { font-weight:600; color:var(--ext-color-primary,#1976d2); }
+  .sel-btn .seta { color:var(--ext-color-primary,#1976d2); transition:transform .15s; }
+  .sel.aberto .sel-btn { border-bottom-left-radius:0; border-bottom-right-radius:0; }
+  .sel.aberto .seta { transform:rotate(180deg); }
+  .sel-pop { display:none; border:1.5px solid var(--ext-color-primary,#1976d2); border-top:none;
+             border-radius:0 0 var(--ext-radius,6px) var(--ext-radius,6px); background:var(--ext-color-bg,#fff); }
+  .sel.aberto .sel-pop { display:block; }
+  .sel-pop input { width:100%; border:none; border-bottom:1px solid var(--ext-color-border,#eee); padding:7px 10px; background:transparent; outline:none; }
+  .sel-opts { max-height:220px; overflow-y:auto; }
+  .opt { display:flex; justify-content:space-between; padding:6px 10px; cursor:pointer; }
+  .opt em { font-style:normal; font-size:11px; opacity:.65; }
+  .opt.ativo { background:var(--ext-color-primary,#1976d2); color:var(--ext-color-on-primary,#fff); }
+  .opt.sel-atual:not(.ativo) { font-weight:600; color:var(--ext-color-primary,#1976d2); }
   .item .meta { display:flex; gap:6px; align-items:center; margin-top:2px; }
   .tag { font-size:10.5px; padding:1px 6px; border-radius:999px; font-weight:600;
          background:rgba(25,118,210,.12); color:var(--ext-color-primary,#1976d2); }
@@ -43,7 +55,13 @@
 
 <div id="lista" class="stack">
   <input id="busca" type="search" placeholder="Buscar procedimento (ex.: reembolso, meia, PIX)">
-  <div class="chips" id="cats"></div>
+  <div class="sel" id="sel">
+    <button class="sel-btn" id="selBtn" type="button"><span>Assunto: <b id="selTxt">Todos</b></span><span class="seta">▾</span></button>
+    <div class="sel-pop">
+      <input id="selBusca" type="text" placeholder="Digite para filtrar assuntos…" autocomplete="off">
+      <div class="sel-opts" id="selOpts"></div>
+    </div>
+  </div>
   <div id="resultados" class="muted">Carregando artigos…</div>
 </div>
 
@@ -137,20 +155,48 @@
 
   el('voltar').onclick = () => { el('detalhe').hidden = true; el('lista').hidden = false; desenharLista(); };
   el('busca').oninput = desenharLista;
-  // roda do mouse rola os assuntos na horizontal
-  el('cats').addEventListener('wheel', (e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el('cats').scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
-  function desenharCats() {
-    const alvo = el('cats'); alvo.innerHTML = '';
+  let catOpts = [], optAtivo = 0, visOpts = [];
+  function montarCats() {
     const cats = new Map();
     artigos.forEach((a) => { if (!a.categoria) return; const c = cats.get(a.categoria) || { nome: a.categoria_nome || a.categoria, n: 0 }; c.n++; cats.set(a.categoria, c); });
-    const todas = [['', { nome: 'Todos', n: artigos.length }], ...[...cats].sort((x, y) => x[1].nome.localeCompare(y[1].nome))];
-    for (const [v, c] of todas) {
-      const b = document.createElement('button'); b.className = 'chip' + (v === catSel ? ' on' : '');
-      b.textContent = c.nome; const e = document.createElement('em'); e.textContent = c.n; b.appendChild(e);
-      b.onclick = () => { catSel = v; desenharCats(); desenharLista(); const on = el('cats').querySelector('.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); };
-      alvo.appendChild(b);
-    }
+    catOpts = [{ v: '', nome: 'Todos os assuntos', n: artigos.length },
+      ...[...cats].map(([v, c]) => ({ v, nome: c.nome, n: c.n })).sort((x, y) => x.nome.localeCompare(y.nome))];
   }
+  function desenharCats() {
+    const q = norm(el('selBusca').value);
+    visOpts = catOpts.filter((o) => !q || norm(o.nome).includes(q));
+    optAtivo = Math.min(optAtivo, Math.max(visOpts.length - 1, 0));
+    const alvo = el('selOpts'); alvo.innerHTML = '';
+    if (!visOpts.length) { const d = document.createElement('div'); d.className = 'opt muted'; d.textContent = 'Nenhum assunto encontrado'; alvo.appendChild(d); }
+    visOpts.forEach((o, i) => {
+      const d = document.createElement('div'); d.className = 'opt' + (i === optAtivo ? ' ativo' : '') + (o.v === catSel ? ' sel-atual' : '');
+      const n = document.createElement('span'); n.textContent = o.nome; const e = document.createElement('em'); e.textContent = o.n;
+      d.append(n, e);
+      d.onmousedown = (ev) => { ev.preventDefault(); escolher(o); };
+      d.onmouseenter = () => { optAtivo = i; alvo.querySelectorAll('.opt').forEach((x, j) => x.classList.toggle('ativo', j === i)); };
+      alvo.appendChild(d);
+    });
+    const at = alvo.querySelector('.ativo'); if (at) at.scrollIntoView({ block: 'nearest' });
+    omni.ui.resize(document.body.scrollHeight + 16);
+  }
+  function abrirSel(on) {
+    el('sel').classList.toggle('aberto', on);
+    if (on) { el('selBusca').value = ''; optAtivo = Math.max(catOpts.findIndex((o) => o.v === catSel), 0); desenharCats(); el('selBusca').focus(); }
+    else omni.ui.resize(document.body.scrollHeight + 16);
+  }
+  function escolher(o) {
+    catSel = o.v; el('selTxt').textContent = o.v ? o.nome : 'Todos';
+    abrirSel(false); desenharLista();
+  }
+  el('selBtn').onclick = () => abrirSel(!el('sel').classList.contains('aberto'));
+  el('selBusca').oninput = () => { optAtivo = 0; desenharCats(); };
+  el('selBusca').onkeydown = (e) => {
+    if (e.key === 'ArrowDown') { optAtivo = Math.min(optAtivo + 1, visOpts.length - 1); desenharCats(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { optAtivo = Math.max(optAtivo - 1, 0); desenharCats(); e.preventDefault(); }
+    else if (e.key === 'Enter') { if (visOpts[optAtivo]) escolher(visOpts[optAtivo]); e.preventDefault(); }
+    else if (e.key === 'Escape') abrirSel(false);
+  };
+  el('selBusca').onblur = () => setTimeout(() => { if (el('sel').classList.contains('aberto')) abrirSel(false); }, 150);
 
   el('enviar').onclick = async () => {
     const texto = el('texto').value.trim();
@@ -189,7 +235,7 @@
         const r2 = await omni.http.request({ url: MIDIAS + '?t=' + Date.now() });
         midias = JSON.parse(r2.body);
       } catch (e) { midias = {}; console.log('sem mapa de midias', e); }
-      desenharCats();
+      montarCats();
       desenharLista();
     } catch (e) {
       el('resultados').textContent = 'Não foi possível carregar a central de ajuda.';
