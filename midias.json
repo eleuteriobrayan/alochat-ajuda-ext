@@ -1,0 +1,74 @@
+{
+ "cliente-01-login-esqueci-senha": {
+  "fileId": 113633,
+  "galleryId": 55
+ },
+ "cliente-02-meus-pedidos-status": {
+  "fileId": 113634,
+  "galleryId": 56
+ },
+ "cliente-03-pedido-cancelado-detalhe": {
+  "fileId": 113635,
+  "galleryId": 57
+ },
+ "cliente-04-pedido-confirmado-ver-ingresso": {
+  "fileId": 113636,
+  "galleryId": 58
+ },
+ "cliente-05-eticket-qr-code": {
+  "fileId": 113637,
+  "galleryId": 59
+ },
+ "cliente-06-alterar-portador-opcoes": {
+  "fileId": 113638,
+  "galleryId": 60
+ },
+ "cliente-07-alterar-portador-outra-pessoa": {
+  "fileId": 113639,
+  "galleryId": 61
+ },
+ "cliente-08-carteira-me-extrato": {
+  "fileId": 113640,
+  "galleryId": 62
+ },
+ "cliente-09-carteira-me-saldo": {
+  "fileId": 113641,
+  "galleryId": 63
+ },
+ "cliente-10-meus-dados": {
+  "fileId": 113642,
+  "galleryId": 64
+ },
+ "cliente-11-comprar-1-pagina-evento": {
+  "fileId": 113643,
+  "galleryId": 65
+ },
+ "cliente-12-comprar-2-setores": {
+  "fileId": 113644,
+  "galleryId": 66
+ },
+ "cliente-13-comprar-3-lote-meia-taxa": {
+  "fileId": 113645,
+  "galleryId": 67
+ },
+ "cliente-15-comprar-5-mapa-do-evento": {
+  "fileId": 113646,
+  "galleryId": 68
+ },
+ "cliente-16-comprar-6-formas-pagamento": {
+  "fileId": 113647,
+  "galleryId": 69
+ },
+ "cliente-17-comprar-7-mesa-bistro": {
+  "fileId": 113648,
+  "galleryId": 70
+ },
+ "cliente-18-comprar-8-escolher-mesa-no-mapa": {
+  "fileId": 113649,
+  "galleryId": 71
+ },
+ "cliente-19-comprar-9-quantidade-e-continuar": {
+  "fileId": 113650,
+  "galleryId": 72
+ }
+}

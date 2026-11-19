@@ -1,0 +1,208 @@
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:12px 12px 20px; font-family:var(--ext-font-family,system-ui,sans-serif);
+         font-size:var(--ext-font-size,13px); line-height:1.4; color:var(--ext-color-text,#222); background:var(--ext-color-bg,#fff); }
+  input, select, textarea, button { font:inherit; color:inherit; }
+  input[type=search], select, textarea { width:100%; padding:7px 9px; border:1px solid var(--ext-color-border,#dcdcdc);
+         border-radius:var(--ext-radius,6px); background:transparent; }
+  input[type=search]:focus, select:focus, textarea:focus { outline:none; border-color:var(--ext-color-primary,#1976d2); }
+  .muted { color:var(--ext-color-text-muted,#888); }
+  .stack > * + * { margin-top:8px; }
+  .item { padding:9px 2px; border-bottom:1px solid var(--ext-color-border,#eee); cursor:pointer; }
+  .item:hover { color:var(--ext-color-primary,#1976d2); }
+  .item b { display:block; font-weight:600; }
+  .item span { font-size:11px; }
+  .voltar { display:inline-flex; align-items:center; gap:4px; padding:6px 12px; cursor:pointer; font-size:12px; font-weight:600;
+            border:1.5px solid var(--ext-color-primary,#1976d2); border-radius:999px;
+            background:rgba(25,118,210,.08); color:var(--ext-color-primary,#1976d2); }
+  .voltar:hover { background:var(--ext-color-primary,#1976d2); color:var(--ext-color-on-primary,#fff); }
+  .titulo { font-size:14px; font-weight:700; margin:6px 0 2px; }
+  textarea { min-height:200px; resize:vertical; font-size:12.5px; }
+  .secao { font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin:12px 0 4px; }
+  .midia { display:flex; gap:8px; align-items:flex-start; padding:6px 8px; margin-top:4px; font-size:12px;
+           border:1px solid var(--ext-color-border,#eee); border-radius:var(--ext-radius,6px); cursor:pointer; }
+  .midia input { margin:2px 0 0; flex:none; }
+  .midia small { display:block; color:var(--ext-color-text-muted,#888); font-size:11px; }
+  .midia.off { opacity:.55; cursor:default; }
+  .rodape { margin-top:14px; }
+  .enviar { width:100%; padding:10px; border:none; border-radius:var(--ext-radius,6px); cursor:pointer; font-weight:600;
+            background:var(--ext-color-primary,#1976d2); color:var(--ext-color-on-primary,#fff); }
+  .enviar[disabled] { opacity:.5; cursor:default; }
+  .dica { font-size:11px; text-align:center; margin-top:6px; }
+  .chips { display:flex; gap:6px; overflow-x:auto; padding:2px 0 6px; scrollbar-width:thin; }
+  .chip { flex:none; padding:5px 10px; border-radius:999px; border:1px solid var(--ext-color-border,#dcdcdc);
+          background:transparent; cursor:pointer; font-size:12px; white-space:nowrap; }
+  .chip:hover { border-color:var(--ext-color-primary,#1976d2); }
+  .chip.on { background:var(--ext-color-primary,#1976d2); border-color:var(--ext-color-primary,#1976d2); color:var(--ext-color-on-primary,#fff); }
+  .chip em { font-style:normal; opacity:.7; margin-left:4px; font-size:11px; }
+  .item .meta { display:flex; gap:6px; align-items:center; margin-top:2px; }
+  .tag { font-size:10.5px; padding:1px 6px; border-radius:999px; font-weight:600;
+         background:rgba(25,118,210,.12); color:var(--ext-color-primary,#1976d2); }
+  [id*="netlify" i], [class*="netlify" i], [data-nf-variant] { display:none !important; }
+</style>
+
+<div id="lista" class="stack">
+  <input id="busca" type="search" placeholder="Buscar procedimento (ex.: reembolso, meia, PIX)">
+  <div class="chips" id="cats"></div>
+  <div id="resultados" class="muted">Carregando artigos…</div>
+</div>
+
+<div id="detalhe" hidden>
+  <button class="voltar" id="voltar">← Voltar aos procedimentos</button>
+  <div class="titulo" id="titulo"></div>
+  <div class="secao muted">Mensagem</div>
+  <textarea id="texto"></textarea>
+  <div id="midias"></div>
+  <div class="rodape">
+    <button class="enviar" id="enviar">Enviar no atendimento</button>
+    <div class="dica muted" id="dica"></div>
+  </div>
+</div>
+
+<script>
+  const API = 'https://ajuda.minhaentrada.com.br/api.php?action=list';
+  const SITE = 'https://ajuda.minhaentrada.com.br/';
+  const MIDIAS = 'https://eleuteriobrayan.github.io/alochat-ajuda-ext/midias.json';
+  let imgs = {}, midias = {}, atual = null, catSel = '';
+  const el = (id) => document.getElementById(id);
+  let artigos = [], chatAtual = null;
+
+  const norm = (s) => (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  function montarTexto(a) {
+    const partes = [a.titulo, '', a.resposta_curta || ''];
+    if (Array.isArray(a.passos) && a.passos.length) {
+      partes.push('', 'Passo a passo:');
+      a.passos.forEach((p, i) => partes.push((i + 1) + '. ' + p));
+    }
+    (a.avisos || []).forEach((av) => { const t = Array.isArray(av) ? av[1] : av; if (t) partes.push('', '⚠️ ' + t); });
+    return partes.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  function desenharLista() {
+    const q = norm(el('busca').value), cat = catSel;
+    const alvo = el('resultados'); alvo.innerHTML = ''; alvo.className = '';
+    const achados = artigos.filter((a) =>
+      (!cat || a.categoria === cat) &&
+      (!q || norm(a.titulo + ' ' + a.palavras_chave + ' ' + a.resposta_curta).includes(q)));
+    if (!achados.length) { alvo.className = 'muted'; alvo.textContent = 'Nenhum procedimento encontrado.'; }
+    for (const a of achados.slice(0, 50)) {
+      const d = document.createElement('div'); d.className = 'item';
+      const b = document.createElement('b'); b.textContent = a.titulo;
+      const s = document.createElement('div'); s.className = 'meta';
+      const c = document.createElement('span'); c.className = 'muted'; c.textContent = a.categoria_nome || '';
+      s.appendChild(c);
+      if ((imgs[a.id] || []).length) { const t = document.createElement('span'); t.className = 'tag'; t.textContent = '🖼 Possui imagem'; s.appendChild(t); }
+      d.append(b, s); d.onclick = () => abrir(a); alvo.appendChild(d);
+    }
+    omni.ui.resize(document.body.scrollHeight + 16);
+  }
+
+  function midiasDo(a) {
+    return (imgs[a.id] || []).slice().sort((x, y) => (x.p || 0) - (y.p || 0))
+      .map((x) => ({ ...x, fileId: midias[x.f] && midias[x.f].fileId }));
+  }
+
+  function desenharMidias(a) {
+    const alvo = el('midias'); alvo.innerHTML = '';
+    const lista = midiasDo(a);
+    if (!lista.length) { atualizarDica(); return; }
+    const t = document.createElement('div'); t.className = 'secao muted'; t.textContent = 'Imagens do passo a passo'; alvo.appendChild(t);
+    lista.forEach((m, i) => {
+      const l = document.createElement('label'); l.className = 'midia' + (m.fileId ? '' : ' off');
+      const c = document.createElement('input'); c.type = 'checkbox'; c.dataset.i = i;
+      c.checked = !!m.fileId; c.disabled = !m.fileId; c.onchange = atualizarDica;
+      const s = document.createElement('div');
+      const b = document.createElement('b'); b.textContent = 'Passo ' + ((m.p || 0) + 1);
+      const d = document.createElement('small'); d.textContent = m.t + (m.fileId ? '' : ' · ainda não cadastrada no AloChat');
+      s.append(b, d); l.append(c, s); alvo.appendChild(l);
+    });
+    atualizarDica();
+  }
+
+  function atualizarDica() {
+    const n = el('midias').querySelectorAll('input:checked').length;
+    el('dica').textContent = chatAtual ? (n ? 'Envia o texto e ' + n + (n > 1 ? ' imagens' : ' imagem') + '.' : 'Envia só o texto.') : 'Abra um atendimento para enviar.';
+  }
+
+  function abrir(a) {
+    atual = a;
+    el('titulo').textContent = a.titulo;
+    desenharMidias(a);
+    el('texto').value = montarTexto(a);
+    el('lista').hidden = true; el('detalhe').hidden = false;
+    el('enviar').disabled = !chatAtual;
+    omni.ui.resize(document.body.scrollHeight + 16);
+  }
+
+  el('voltar').onclick = () => { el('detalhe').hidden = true; el('lista').hidden = false; desenharLista(); };
+  el('busca').oninput = desenharLista;
+  // roda do mouse rola os assuntos na horizontal
+  el('cats').addEventListener('wheel', (e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el('cats').scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
+  function desenharCats() {
+    const alvo = el('cats'); alvo.innerHTML = '';
+    const cats = new Map();
+    artigos.forEach((a) => { if (!a.categoria) return; const c = cats.get(a.categoria) || { nome: a.categoria_nome || a.categoria, n: 0 }; c.n++; cats.set(a.categoria, c); });
+    const todas = [['', { nome: 'Todos', n: artigos.length }], ...[...cats].sort((x, y) => x[1].nome.localeCompare(y[1].nome))];
+    for (const [v, c] of todas) {
+      const b = document.createElement('button'); b.className = 'chip' + (v === catSel ? ' on' : '');
+      b.textContent = c.nome; const e = document.createElement('em'); e.textContent = c.n; b.appendChild(e);
+      b.onclick = () => { catSel = v; desenharCats(); desenharLista(); const on = el('cats').querySelector('.on'); if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' }); };
+      alvo.appendChild(b);
+    }
+  }
+
+  el('enviar').onclick = async () => {
+    const texto = el('texto').value.trim();
+    if (!chatAtual || !texto) return;
+    el('enviar').disabled = true;
+    try {
+      await omni.chats.sendMessage(chatAtual.id, { text: texto });
+      const lista = atual ? midiasDo(atual) : [];
+      const marcadas = [...el('midias').querySelectorAll('input:checked')].map((c) => lista[+c.dataset.i]).filter((m) => m && m.fileId);
+      for (const m of marcadas) {
+        await omni.chats.sendMessage(chatAtual.id, { fileId: m.fileId, text: m.t });
+      }
+      await omni.ui.toast(marcadas.length ? 'Procedimento e ' + marcadas.length + ' imagem(ns) enviados.' : 'Procedimento enviado.', 'success');
+    } catch (e) {
+      if (e && e.code === 'forbidden') await omni.ui.alert({ message: 'Você não pode enviar mensagem neste atendimento.' });
+      else await omni.ui.toast('Falha ao enviar.', 'error');
+    } finally { el('enviar').disabled = !chatAtual; }
+  };
+
+  async function carregarArtigos() {
+    try {
+      const cache = await omni.state.get('ajudaKB');
+      let kb = cache && Date.now() - cache.at < 10 * 60 * 1000 ? cache.kb : null;
+      if (!kb) {
+        const r = await omni.http.request({ url: API });
+        kb = JSON.parse(r.body);
+        await omni.state.set('ajudaKB', { at: Date.now(), kb });
+      }
+      artigos = kb.artigos || [];
+      try {
+        const h = await omni.http.request({ url: SITE });
+        const m = h.body.match(/var IMGS=(\{[\s\S]*?\});\s*\n/);
+        imgs = m ? JSON.parse(m[1]) : {};
+      } catch (e) { imgs = {}; console.log('sem imagens do site', e); }
+      try {
+        const r2 = await omni.http.request({ url: MIDIAS + '?t=' + Date.now() });
+        midias = JSON.parse(r2.body);
+      } catch (e) { midias = {}; console.log('sem mapa de midias', e); }
+      desenharCats();
+      desenharLista();
+    } catch (e) {
+      el('resultados').textContent = 'Não foi possível carregar a central de ajuda.';
+      console.log('falha carregando artigos', e);
+    }
+  }
+
+  omni.ready(async () => {
+    chatAtual = await omni.chats.getSelected();
+    await carregarArtigos();
+  });
+  omni.on('omniChatSelected', (chat) => { chatAtual = chat; el('enviar').disabled = !chatAtual; atualizarDica(); });
+  // remove o selo que a hospedagem injeta no HTML
+  new MutationObserver(() => document.querySelectorAll('[data-nf-variant], [id*="netlify" i], [class*="netlify" i]').forEach((n) => n.remove()))
+    .observe(document.documentElement, { childList: true, subtree: true });
+</script>
